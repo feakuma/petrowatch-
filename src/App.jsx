@@ -251,7 +251,7 @@ Responda SOMENTE em JSON válido, sem markdown, sem texto fora do JSON, com esta
   "negatives": ["<fator 1>", "<fator 2>", "<fator 3>"],
   "risks": ["<risco 1>", "<risco 2>"],
   "targets": { "support": <R$>, "resistance": <R$>, "target_bull": <R$>, "target_bear": <R$> },
-  "context": "<análise detalhada em 3-4 parágrafos>"
+  "context": "<análise detalhada em 2 parágrafos curtos>"
 }`;
 
     try {
@@ -278,7 +278,11 @@ Responda SOMENTE em JSON válido, sem markdown, sem texto fora do JSON, com esta
       }
       const data = await res.json();
       const text = data.content?.find(b => b.type === "text")?.text || "{}";
-      const clean = text.replace(/```json|```/g, "").trim();
+      let clean = text.replace(/```json|```/g, "").trim();
+      // fix truncated JSON: close open string then object
+      if (data.stop_reason === "max_tokens") {
+        clean = clean.replace(/,?\s*"context"\s*:\s*"[^"]*$/, '') + '}';
+      }
       setAnalysis(JSON.parse(clean));
     } catch {
       setAnalysis({ error: true, summary: "Erro ao carregar análise. Verifique sua chave de API e tente novamente." });
