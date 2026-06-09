@@ -120,6 +120,9 @@ async function fetchAlphaVantage() {
   return result;
 }
 
+// ─── Empty market state ───────────────────────────────────────────────────────
+const EMPTY_MARKET = { brent: null, wti: null, dxy: null, usdbrl: null, petr4: null, ibov: null, xle: null, sp500: null };
+
 // ─── Ticker config ────────────────────────────────────────────────────────────
 const TICKERS = {
   brent:  { label: "Brent Crude",     symbol: "BRENT",    unit: "USD/bbl", color: "#f59e0b" },
