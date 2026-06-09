@@ -23,13 +23,13 @@ const TWELVE_KEY = import.meta.env.VITE_TWELVE_KEY;
 
 // symbol map: internal key → Twelve Data symbol
 const TWELVE_SYMBOLS = {
-  brent:  "UKOIL",
-  wti:    "USOIL",
-  dxy:    "DXY",
+  brent:  "XBR/USD",   // Brent Crude (forex-style commodity)
+  wti:    "XTI/USD",   // WTI Crude
+  dxy:    "DX-Y.NYB",  // US Dollar Index
   xle:    "XLE",
-  sp500:  "SPX",
+  sp500:  "SPY",       // S&P 500 ETF (SPX requer plano pago)
   usdbrl: "USD/BRL",
-  ibov:   "IBOV",
+  ibov:   "BVSP",      // Ibovespa
 };
 
 async function fetchTwelveData() {
@@ -55,13 +55,13 @@ async function fetchTwelveData() {
   };
 
   return {
-    brent:  parse("UKOIL"),
-    wti:    parse("USOIL"),
-    dxy:    parse("DXY"),
+    brent:  parse("XBR/USD"),
+    wti:    parse("XTI/USD"),
+    dxy:    parse("DX-Y.NYB"),
     xle:    parse("XLE"),
-    sp500:  parse("SPX"),
+    sp500:  parse("SPY"),
     usdbrl: parse("USD/BRL"),
-    ibov:   parse("IBOV"),
+    ibov:   parse("BVSP"),
   };
 }
 
@@ -74,7 +74,7 @@ const TICKERS = {
   petr4:  { label: "PETR4",          symbol: "PETR4.SA", unit: "R$",      color: "#a78bfa" },
   ibov:   { label: "IBOVESPA",       symbol: "^BVSP",    unit: "pts",     color: "#fb7185" },
   xle:    { label: "XLE ETF",        symbol: "XLE",      unit: "USD",     color: "#fbbf24" },
-  sp500:  { label: "S&P 500",        symbol: "^GSPC",    unit: "pts",     color: "#38bdf8" },
+  sp500:  { label: "S&P 500 (SPY)",   symbol: "SPY",      unit: "USD",     color: "#38bdf8" },
 };
 
 // ─── Mock market data ─────────────────────────────────────────────────────────
