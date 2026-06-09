@@ -1,5 +1,35 @@
 import { useState, useEffect, useCallback } from "react";
 
+// ─── Brapi: PETR4, IBOV, USD/BRL ─────────────────────────────────────────────
+async function fetchBrapi() {
+  const [stocks, currency] = await Promise.all([
+    fetch("https://brapi.dev/api/quote/PETR4,%5EBVSP").then(r => r.json()),
+    fetch("https://brapi.dev/api/v2/currency?currency=USD-BRL").then(r => r.json()),
+  ]);
+
+  const petr4raw = stocks.results?.find(r => r.symbol === "PETR4");
+  const ibovraw  = stocks.results?.find(r => r.symbol === "^BVSP");
+  const brlraw   = currency.currency?.[0];
+
+  return {
+    petr4: petr4raw ? {
+      price:  petr4raw.regularMarketPrice,
+      change: petr4raw.regularMarketChange,
+      pct:    petr4raw.regularMarketChangePercent,
+    } : null,
+    ibov: ibovraw ? {
+      price:  ibovraw.regularMarketPrice,
+      change: ibovraw.regularMarketChange,
+      pct:    ibovraw.regularMarketChangePercent,
+    } : null,
+    usdbrl: brlraw ? {
+      price:  brlraw.bidPrice ?? brlraw.ask,
+      change: +(brlraw.bidPrice * (brlraw.pctChange / 100)).toFixed(4),
+      pct:    brlraw.pctChange,
+    } : null,
+  };
+}
+
 // ─── Ticker config ────────────────────────────────────────────────────────────
 const TICKERS = {
   brent:  { label: "Brent Crude",    symbol: "BZ=F",     unit: "USD/bbl", color: "#f59e0b" },
@@ -207,13 +237,35 @@ export default function PetroWatch() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("pw_api_key") || "");
   const [showKeyModal, setShowKeyModal] = useState(false);
 
-  useEffect(() => {
-    const id = setInterval(() => {
-      setMarket(getMockData());
-      setLastUpdate(new Date());
-    }, 30000);
-    return () => clearInterval(id);
+  const refreshMarket = useCallback(async () => {
+    // start with mock so layout never breaks
+    const base = getMockData();
+    try {
+      const brapi = await fetchBrapi();
+      setMarket(prev => ({
+        ...base,
+        // keep previous international values (real ones once Twelve Data is added)
+        brent:  prev.brent,
+        wti:    prev.wti,
+        dxy:    prev.dxy,
+        xle:    prev.xle,
+        sp500:  prev.sp500,
+        // real BR data from Brapi
+        petr4:  brapi.petr4  ?? base.petr4,
+        ibov:   brapi.ibov   ?? base.ibov,
+        usdbrl: brapi.usdbrl ?? base.usdbrl,
+      }));
+    } catch {
+      setMarket(base);
+    }
+    setLastUpdate(new Date());
   }, []);
+
+  useEffect(() => {
+    refreshMarket();
+    const id = setInterval(refreshMarket, 5 * 60 * 1000); // 5 min
+    return () => clearInterval(id);
+  }, [refreshMarket]);
 
   const saveKey = (key) => {
     localStorage.setItem("pw_api_key", key);
