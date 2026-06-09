@@ -1,35 +1,40 @@
 import { useState, useEffect, useCallback } from "react";
 
-// ─── Brapi: somente PETR4 ────────────────────────────────────────────────────
+// ─── Brapi: PETR4 + IBOV ─────────────────────────────────────────────────────
 const BRAPI_KEY = import.meta.env.VITE_BRAPI_KEY;
 
 async function fetchBrapi() {
   if (!BRAPI_KEY) return {};
-  const res = await fetch(`https://brapi.dev/api/quote/PETR4?token=${BRAPI_KEY}`);
-  const data = await res.json();
-  const q = data.results?.[0];
-  if (!q) return {};
+  const [petrRes, ibovRes] = await Promise.allSettled([
+    fetch(`https://brapi.dev/api/quote/PETR4?token=${BRAPI_KEY}`).then(r => r.json()),
+    fetch(`https://brapi.dev/api/quote/%5EBVSP?token=${BRAPI_KEY}`).then(r => r.json()),
+  ]);
+
+  const petr4raw = petrRes.status === "fulfilled" ? petrRes.value.results?.[0] : null;
+  const ibovraw  = ibovRes.status === "fulfilled" ? ibovRes.value.results?.[0] : null;
+
   return {
-    petr4: {
-      price:  q.regularMarketPrice,
-      change: q.regularMarketChange,
-      pct:    q.regularMarketChangePercent,
-    },
+    petr4: petr4raw ? {
+      price:  petr4raw.regularMarketPrice,
+      change: petr4raw.regularMarketChange,
+      pct:    petr4raw.regularMarketChangePercent,
+    } : null,
+    ibov: ibovraw ? {
+      price:  ibovraw.regularMarketPrice,
+      change: ibovraw.regularMarketChange,
+      pct:    ibovraw.regularMarketChangePercent,
+    } : null,
   };
 }
 
 // ─── Twelve Data: Brent, WTI, DXY, XLE, S&P500 ───────────────────────────────
 const TWELVE_KEY = import.meta.env.VITE_TWELVE_KEY;
 
-// symbol map: internal key → Twelve Data symbol
+// symbol map: internal key → Twelve Data symbol (free plan)
 const TWELVE_SYMBOLS = {
-  brent:  "XBR/USD",   // Brent Crude (forex-style commodity)
-  wti:    "XTI/USD",   // WTI Crude
-  dxy:    "DX-Y.NYB",  // US Dollar Index
   xle:    "XLE",
-  sp500:  "SPY",       // S&P 500 ETF (SPX requer plano pago)
+  sp500:  "SPY",
   usdbrl: "USD/BRL",
-  ibov:   "BVSP",      // Ibovespa
 };
 
 async function fetchTwelveData() {
@@ -55,13 +60,9 @@ async function fetchTwelveData() {
   };
 
   return {
-    brent:  parse("XBR/USD"),
-    wti:    parse("XTI/USD"),
-    dxy:    parse("DX-Y.NYB"),
     xle:    parse("XLE"),
     sp500:  parse("SPY"),
     usdbrl: parse("USD/BRL"),
-    ibov:   parse("BVSP"),
   };
 }
 
@@ -290,14 +291,14 @@ export default function PetroWatch() {
       const t = twelve.status === "fulfilled" ? twelve.value : null;
       setMarket({
         ...base,
-        petr4:  b.petr4       ?? null,
-        ibov:   t?.ibov       ?? null,
-        usdbrl: t?.usdbrl     ?? null,
-        brent:  t?.brent      ?? null,
-        wti:    t?.wti        ?? null,
-        dxy:    t?.dxy        ?? null,
-        xle:    t?.xle        ?? null,
-        sp500:  t?.sp500      ?? null,
+        petr4:  b.petr4    ?? null,
+        ibov:   b.ibov     ?? null,
+        usdbrl: t?.usdbrl  ?? null,
+        xle:    t?.xle     ?? null,
+        sp500:  t?.sp500   ?? null,
+        brent:  null,
+        wti:    null,
+        dxy:    null,
       });
     } catch {
       setMarket({ brent: null, wti: null, dxy: null, usdbrl: null, petr4: null, ibov: null, xle: null, sp500: null });
