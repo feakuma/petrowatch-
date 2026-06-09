@@ -35,7 +35,10 @@ const TWELVE_SYMBOLS = {
 async function fetchTwelveData() {
   if (!TWELVE_KEY) return null;
 
-  const symbols = Object.values(TWELVE_SYMBOLS).join(",");
+  const symbols = Object.values(TWELVE_SYMBOLS)
+    .map(s => encodeURIComponent(s))
+    .join(",");
+
   const res = await fetch(
     `https://api.twelvedata.com/quote?symbol=${symbols}&apikey=${TWELVE_KEY}`
   );
@@ -297,7 +300,7 @@ export default function PetroWatch() {
         sp500:  t?.sp500      ?? null,
       });
     } catch {
-      setMarket(base);
+      setMarket({ brent: null, wti: null, dxy: null, usdbrl: null, petr4: null, ibov: null, xle: null, sp500: null });
     }
     setLastUpdate(new Date());
   }, []);
