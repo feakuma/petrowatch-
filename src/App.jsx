@@ -1,10 +1,32 @@
 import { useState, useEffect, useCallback } from "react";
 
+// ─── Cache helpers (TTL: 1 hora) ─────────────────────────────────────────────
+const CACHE_TTL = 60 * 60 * 1000;
+
+function getCached(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > CACHE_TTL) return null;
+    return data;
+  } catch { return null; }
+}
+
+function setCache(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
+  } catch {}
+}
+
 // ─── Brapi: PETR4 + IBOV ─────────────────────────────────────────────────────
 const BRAPI_KEY = import.meta.env.VITE_BRAPI_KEY;
 
 async function fetchBrapi() {
   if (!BRAPI_KEY) return {};
+  const cached = getCached("pw_brapi");
+  if (cached) return cached;
+
   const [petrRes, ibovRes] = await Promise.allSettled([
     fetch(`https://brapi.dev/api/quote/PETR4?token=${BRAPI_KEY}`).then(r => r.json()),
     fetch(`https://brapi.dev/api/quote/%5EBVSP?token=${BRAPI_KEY}`).then(r => r.json()),
@@ -13,7 +35,7 @@ async function fetchBrapi() {
   const petr4raw = petrRes.status === "fulfilled" ? petrRes.value.results?.[0] : null;
   const ibovraw  = ibovRes.status === "fulfilled" ? ibovRes.value.results?.[0] : null;
 
-  return {
+  const result = {
     petr4: petr4raw ? {
       price:  petr4raw.regularMarketPrice,
       change: petr4raw.regularMarketChange,
@@ -25,22 +47,19 @@ async function fetchBrapi() {
       pct:    ibovraw.regularMarketChangePercent,
     } : null,
   };
+  setCache("pw_brapi", result);
+  return result;
 }
 
-// ─── Twelve Data: Brent, WTI, DXY, XLE, S&P500 ───────────────────────────────
+// ─── Twelve Data: XLE, SPY, USD/BRL, EUR/USD ─────────────────────────────────
 const TWELVE_KEY = import.meta.env.VITE_TWELVE_KEY;
-
-// symbol map: internal key → Twelve Data symbol (free plan)
-const TWELVE_SYMBOLS = {
-  xle:    "XLE",
-  sp500:  "SPY",
-  usdbrl: "USD/BRL",
-};
 
 async function fetchTwelveData() {
   if (!TWELVE_KEY) return null;
+  const cached = getCached("pw_td");
+  if (cached) return cached;
 
-  const symbols = Object.values(TWELVE_SYMBOLS)
+  const symbols = ["XLE", "SPY", "USD/BRL", "EUR/USD"]
     .map(s => encodeURIComponent(s))
     .join(",");
 
@@ -59,44 +78,59 @@ async function fetchTwelveData() {
     return { price, change, pct };
   };
 
-  return {
+  const result = {
     xle:    parse("XLE"),
     sp500:  parse("SPY"),
     usdbrl: parse("USD/BRL"),
+    dxy:    parse("EUR/USD"),
   };
+  setCache("pw_td", result);
+  return result;
+}
+
+// ─── Alpha Vantage: Brent + WTI (1x/hora, cache localStorage) ────────────────
+const AV_KEY = import.meta.env.VITE_AV_KEY;
+
+async function fetchAlphaVantage() {
+  if (!AV_KEY) return null;
+  const cached = getCached("pw_av");
+  if (cached) return cached;
+
+  const parseAV = (json) => {
+    const pts = json?.data;
+    if (!pts || pts.length < 2) return null;
+    const price = parseFloat(pts[0].value);
+    const prev  = parseFloat(pts[1].value);
+    if (isNaN(price) || isNaN(prev)) return null;
+    const change = +(price - prev).toFixed(2);
+    const pct    = +((change / prev) * 100).toFixed(2);
+    return { price, change, pct };
+  };
+
+  const [wtiRes, brentRes] = await Promise.allSettled([
+    fetch(`https://www.alphavantage.co/query?function=WTI&interval=daily&apikey=${AV_KEY}`).then(r => r.json()),
+    fetch(`https://www.alphavantage.co/query?function=BRENT&interval=daily&apikey=${AV_KEY}`).then(r => r.json()),
+  ]);
+
+  const result = {
+    wti:   wtiRes.status   === "fulfilled" ? parseAV(wtiRes.value)   : null,
+    brent: brentRes.status === "fulfilled" ? parseAV(brentRes.value) : null,
+  };
+  setCache("pw_av", result);
+  return result;
 }
 
 // ─── Ticker config ────────────────────────────────────────────────────────────
 const TICKERS = {
-  brent:  { label: "Brent Crude",    symbol: "BZ=F",     unit: "USD/bbl", color: "#f59e0b" },
-  wti:    { label: "WTI Crude",      symbol: "CL=F",     unit: "USD/bbl", color: "#f97316" },
-  dxy:    { label: "DXY (US Dollar)", symbol: "DX-Y.NYB", unit: "pts",     color: "#60a5fa" },
-  usdbrl: { label: "USD/BRL",        symbol: "BRL=X",    unit: "R$",      color: "#34d399" },
-  petr4:  { label: "PETR4",          symbol: "PETR4.SA", unit: "R$",      color: "#a78bfa" },
-  ibov:   { label: "IBOVESPA",       symbol: "^BVSP",    unit: "pts",     color: "#fb7185" },
-  xle:    { label: "XLE ETF",        symbol: "XLE",      unit: "USD",     color: "#fbbf24" },
+  brent:  { label: "Brent Crude",     symbol: "BRENT",    unit: "USD/bbl", color: "#f59e0b" },
+  wti:    { label: "WTI Crude",       symbol: "WTI",      unit: "USD/bbl", color: "#f97316" },
+  dxy:    { label: "EUR/USD",         symbol: "EUR/USD",  unit: "USD",     color: "#60a5fa" },
+  usdbrl: { label: "USD/BRL",         symbol: "USD/BRL",  unit: "R$",      color: "#34d399" },
+  petr4:  { label: "PETR4",           symbol: "PETR4.SA", unit: "R$",      color: "#a78bfa" },
+  ibov:   { label: "IBOVESPA",        symbol: "^BVSP",    unit: "pts",     color: "#fb7185" },
+  xle:    { label: "XLE ETF",         symbol: "XLE",      unit: "USD",     color: "#fbbf24" },
   sp500:  { label: "S&P 500 (SPY)",   symbol: "SPY",      unit: "USD",     color: "#38bdf8" },
 };
-
-// ─── Mock market data ─────────────────────────────────────────────────────────
-function getMockData() {
-  const base = {
-    brent:  { price: 78.42,   change: -0.83, pct: -1.05 },
-    wti:    { price: 74.18,   change: -0.71, pct: -0.95 },
-    dxy:    { price: 104.32,  change:  0.28, pct:  0.27 },
-    usdbrl: { price: 5.14,    change:  0.03, pct:  0.58 },
-    petr4:  { price: 38.76,   change: -0.44, pct: -1.12 },
-    ibov:   { price: 132480,  change: -620,  pct: -0.47 },
-    xle:    { price: 89.14,   change: -0.92, pct: -1.02 },
-    sp500:  { price: 5412,    change:  18.3, pct:  0.34 },
-  };
-  return Object.fromEntries(
-    Object.entries(base).map(([k, v]) => {
-      const drift = (Math.random() - 0.5) * 0.002;
-      return [k, { ...v, price: +(v.price * (1 + drift)).toFixed(2) }];
-    })
-  );
-}
 
 // ─── Sparkline ─────────────────────────────────────────────────────────────────
 function Sparkline({ positive }) {
@@ -275,7 +309,7 @@ function ApiKeyModal({ onSave }) {
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function PetroWatch() {
-  const [market, setMarket] = useState(getMockData());
+  const [market, setMarket] = useState(EMPTY_MARKET);
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
@@ -284,24 +318,25 @@ export default function PetroWatch() {
   const [showKeyModal, setShowKeyModal] = useState(false);
 
   const refreshMarket = useCallback(async () => {
-    const base = getMockData();
     try {
-      const [brapi, twelve] = await Promise.allSettled([fetchBrapi(), fetchTwelveData()]);
-      const b = brapi.status === "fulfilled" ? brapi.value : {};
+      const [brapi, twelve, av] = await Promise.allSettled([
+        fetchBrapi(), fetchTwelveData(), fetchAlphaVantage(),
+      ]);
+      const b = brapi.status  === "fulfilled" ? brapi.value  : {};
       const t = twelve.status === "fulfilled" ? twelve.value : null;
+      const a = av.status     === "fulfilled" ? av.value     : null;
       setMarket({
-        ...base,
         petr4:  b.petr4    ?? null,
         ibov:   b.ibov     ?? null,
         usdbrl: t?.usdbrl  ?? null,
         xle:    t?.xle     ?? null,
         sp500:  t?.sp500   ?? null,
-        brent:  null,
-        wti:    null,
-        dxy:    null,
+        dxy:    t?.dxy     ?? null,
+        brent:  a?.brent   ?? null,
+        wti:    a?.wti     ?? null,
       });
     } catch {
-      setMarket({ brent: null, wti: null, dxy: null, usdbrl: null, petr4: null, ibov: null, xle: null, sp500: null });
+      setMarket(EMPTY_MARKET);
     }
     setLastUpdate(new Date());
   }, []);

@@ -33,6 +33,7 @@ jobs:
         env:
           VITE_TWELVE_KEY: ${{ secrets.VITE_TWELVE_KEY }}
           VITE_BRAPI_KEY: ${{ secrets.VITE_BRAPI_KEY }}
+          VITE_AV_KEY: ${{ secrets.VITE_AV_KEY }}
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
