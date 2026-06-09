@@ -30,6 +30,39 @@ async function fetchBrapi() {
   };
 }
 
+// ─── Twelve Data: Brent, WTI, DXY, XLE, S&P500 ───────────────────────────────
+const TWELVE_KEY = import.meta.env.VITE_TWELVE_KEY;
+
+async function fetchTwelveData() {
+  if (!TWELVE_KEY) return null;
+  const symbols = "BZ=F,CL=F,DX-Y.NYB,XLE,SPX";
+  const res = await fetch(
+    `https://api.twelvedata.com/price?symbol=${symbols}&apikey=${TWELVE_KEY}`
+  );
+  const data = await res.json();
+
+  const prev = await fetch(
+    `https://api.twelvedata.com/eod?symbol=${symbols}&apikey=${TWELVE_KEY}`
+  ).then(r => r.json());
+
+  const parse = (symbol, id) => {
+    const price  = parseFloat(data[symbol]?.price);
+    const close  = parseFloat(prev[symbol]?.close);
+    if (isNaN(price) || isNaN(close)) return null;
+    const change = +(price - close).toFixed(2);
+    const pct    = +((change / close) * 100).toFixed(2);
+    return { price, change, pct };
+  };
+
+  return {
+    brent:  parse("BZ=F",      "brent"),
+    wti:    parse("CL=F",      "wti"),
+    dxy:    parse("DX-Y.NYB",  "dxy"),
+    xle:    parse("XLE",       "xle"),
+    sp500:  parse("SPX",       "sp500"),
+  };
+}
+
 // ─── Ticker config ────────────────────────────────────────────────────────────
 const TICKERS = {
   brent:  { label: "Brent Crude",    symbol: "BZ=F",     unit: "USD/bbl", color: "#f59e0b" },
@@ -238,23 +271,22 @@ export default function PetroWatch() {
   const [showKeyModal, setShowKeyModal] = useState(false);
 
   const refreshMarket = useCallback(async () => {
-    // start with mock so layout never breaks
     const base = getMockData();
     try {
-      const brapi = await fetchBrapi();
-      setMarket(prev => ({
+      const [brapi, twelve] = await Promise.allSettled([fetchBrapi(), fetchTwelveData()]);
+      const b = brapi.status === "fulfilled" ? brapi.value : {};
+      const t = twelve.status === "fulfilled" ? twelve.value : null;
+      setMarket({
         ...base,
-        // keep previous international values (real ones once Twelve Data is added)
-        brent:  prev.brent,
-        wti:    prev.wti,
-        dxy:    prev.dxy,
-        xle:    prev.xle,
-        sp500:  prev.sp500,
-        // real BR data from Brapi
-        petr4:  brapi.petr4  ?? base.petr4,
-        ibov:   brapi.ibov   ?? base.ibov,
-        usdbrl: brapi.usdbrl ?? base.usdbrl,
-      }));
+        petr4:  b.petr4  ?? base.petr4,
+        ibov:   b.ibov   ?? base.ibov,
+        usdbrl: b.usdbrl ?? base.usdbrl,
+        brent:  t?.brent  ?? base.brent,
+        wti:    t?.wti    ?? base.wti,
+        dxy:    t?.dxy    ?? base.dxy,
+        xle:    t?.xle    ?? base.xle,
+        sp500:  t?.sp500  ?? base.sp500,
+      });
     } catch {
       setMarket(base);
     }
