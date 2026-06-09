@@ -33,33 +33,40 @@ async function fetchBrapi() {
 // ─── Twelve Data: Brent, WTI, DXY, XLE, S&P500 ───────────────────────────────
 const TWELVE_KEY = import.meta.env.VITE_TWELVE_KEY;
 
+// symbol map: internal key → Twelve Data symbol
+const TWELVE_SYMBOLS = {
+  brent: "UKOIL",
+  wti:   "USOIL",
+  dxy:   "DXY",
+  xle:   "XLE",
+  sp500: "SPX",
+};
+
 async function fetchTwelveData() {
   if (!TWELVE_KEY) return null;
-  const symbols = "BZ=F,CL=F,DX-Y.NYB,XLE,SPX";
+
+  const symbols = Object.values(TWELVE_SYMBOLS).join(",");
   const res = await fetch(
-    `https://api.twelvedata.com/price?symbol=${symbols}&apikey=${TWELVE_KEY}`
+    `https://api.twelvedata.com/quote?symbol=${symbols}&apikey=${TWELVE_KEY}`
   );
   const data = await res.json();
 
-  const prev = await fetch(
-    `https://api.twelvedata.com/eod?symbol=${symbols}&apikey=${TWELVE_KEY}`
-  ).then(r => r.json());
-
-  const parse = (symbol, id) => {
-    const price  = parseFloat(data[symbol]?.price);
-    const close  = parseFloat(prev[symbol]?.close);
-    if (isNaN(price) || isNaN(close)) return null;
-    const change = +(price - close).toFixed(2);
-    const pct    = +((change / close) * 100).toFixed(2);
+  const parse = (sym) => {
+    const q = data[sym];
+    if (!q || q.status === "error") return null;
+    const price  = parseFloat(q.close);
+    const change = parseFloat(q.change);
+    const pct    = parseFloat(q.percent_change);
+    if (isNaN(price)) return null;
     return { price, change, pct };
   };
 
   return {
-    brent:  parse("BZ=F",      "brent"),
-    wti:    parse("CL=F",      "wti"),
-    dxy:    parse("DX-Y.NYB",  "dxy"),
-    xle:    parse("XLE",       "xle"),
-    sp500:  parse("SPX",       "sp500"),
+    brent: parse("UKOIL"),
+    wti:   parse("USOIL"),
+    dxy:   parse("DXY"),
+    xle:   parse("XLE"),
+    sp500: parse("SPX"),
   };
 }
 
