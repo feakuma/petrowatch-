@@ -115,7 +115,17 @@ function Sparkline({ positive }) {
 // ─── Ticker Card ──────────────────────────────────────────────────────────────
 function TickerCard({ id, data }) {
   const cfg = TICKERS[id];
-  if (!data) return null;
+  if (!data) return (
+    <div style={{
+      background: "rgba(15,20,35,0.85)", border: "1px solid rgba(255,255,255,0.06)",
+      borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column",
+      gap: 6, minWidth: 0, opacity: 0.4,
+    }}>
+      <div style={{ fontSize: 10, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase", fontFamily: "monospace" }}>{cfg.symbol}</div>
+      <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>{cfg.label}</div>
+      <div style={{ fontSize: 13, color: "#475569", marginTop: 6 }}>— sem dados —</div>
+    </div>
+  );
   const up = data.pct >= 0;
   return (
     <div style={{
@@ -281,11 +291,11 @@ export default function PetroWatch() {
         petr4:  b.petr4  ?? base.petr4,
         ibov:   b.ibov   ?? base.ibov,
         usdbrl: b.usdbrl ?? base.usdbrl,
-        brent:  t?.brent  ?? base.brent,
-        wti:    t?.wti    ?? base.wti,
-        dxy:    t?.dxy    ?? base.dxy,
-        xle:    t?.xle    ?? base.xle,
-        sp500:  t?.sp500  ?? base.sp500,
+        brent:  t?.brent  ?? null,
+        wti:    t?.wti    ?? null,
+        dxy:    t?.dxy    ?? null,
+        xle:    t?.xle    ?? null,
+        sp500:  t?.sp500  ?? null,
       });
     } catch {
       setMarket(base);
