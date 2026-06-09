@@ -1,10 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 
 // ─── Brapi: PETR4, IBOV, USD/BRL ─────────────────────────────────────────────
+const BRAPI_KEY = import.meta.env.VITE_BRAPI_KEY;
+
 async function fetchBrapi() {
+  if (!BRAPI_KEY) return {};
+  const token = `token=${BRAPI_KEY}`;
   const [stocks, currency] = await Promise.all([
-    fetch("https://brapi.dev/api/quote/PETR4,%5EBVSP").then(r => r.json()),
-    fetch("https://brapi.dev/api/v2/currency?currency=USD-BRL").then(r => r.json()),
+    fetch(`https://brapi.dev/api/quote/PETR4,%5EBVSP?${token}`).then(r => r.json()),
+    fetch(`https://brapi.dev/api/v2/currency?currency=USD-BRL&${token}`).then(r => r.json()),
   ]);
 
   const petr4raw = stocks.results?.find(r => r.symbol === "PETR4");
